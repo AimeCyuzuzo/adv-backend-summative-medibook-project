@@ -1,0 +1,14 @@
+{
+  "name": "medibook",
+  "version": "1.0.0",
+  "description": "MediBook clinic appointment booking API",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "db:schema": "sh scripts/db.sh schema",
+    "db:seed": "sh scripts/db.sh seed",
+    "db:reset": "sh scripts/db.sh reset",
+    "db:drop": "sh scripts/db.sh drop",
+    "db:shell": "sh scripts/db.sh shell"
+  }
+}
