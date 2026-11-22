@@ -14,7 +14,7 @@ services:
       # but ONLY the first time, when the mysql_data volume is empty.
       - ./database:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_PASSWORD}"]
       interval: 5s
       retries: 10
 
