@@ -1,0 +1,37 @@
+---
+title: MediBook — Database Schema (3NF)
+---
+erDiagram
+    PATIENTS ||--o{ APPOINTMENTS : "books (1:N)"
+    DOCTORS  ||--o{ APPOINTMENTS : "attends (1:N)"
+
+    PATIENTS {
+        INT          patient_id   PK "UNSIGNED AUTO_INCREMENT"
+        VARCHAR(100) full_name       "NOT NULL"
+        VARCHAR(150) email        UK "NOT NULL UNIQUE"
+        VARCHAR(20)  phone           "NOT NULL"
+        DATETIME     created_at      "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    DOCTORS {
+        INT          doctor_id        PK "UNSIGNED AUTO_INCREMENT"
+        VARCHAR(100) full_name           "NOT NULL"
+        VARCHAR(80)  specialty           "NOT NULL"
+        DECIMAL      consultation_fee    "DECIMAL(10,2) NOT NULL CHECK (consultation_fee >= 0)"
+        VARCHAR(10)  room                "NOT NULL"
+        DATETIME     created_at          "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    APPOINTMENTS {
+        INT          appointment_id PK  "UNSIGNED AUTO_INCREMENT"
+        VARCHAR(20)  appt_ref       UK  "NOT NULL UNIQUE e.g. AP-001"
+        INT          patient_id     FK  "UNSIGNED NOT NULL -> PATIENTS ON DELETE RESTRICT"
+        INT          doctor_id      FK  "UNSIGNED NOT NULL -> DOCTORS ON DELETE RESTRICT"
+        DATETIME     appt_datetime      "NOT NULL CHECK minute IN (0,30) AND second = 0 AND hour BETWEEN 9 AND 16"
+        DECIMAL      amount_paid        "DECIMAL(10,2) NOT NULL CHECK (amount_paid >= 0)"
+        ENUM         status             "ENUM('BOOKED','CANCELLED') NOT NULL DEFAULT 'BOOKED'"
+        DATETIME     booked_on          "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        DATETIME     cancelled_at       "NULL CHECK set if and only if status = 'CANCELLED'"
+        DECIMAL      refund_amount      "DECIMAL(10,2) NULL CHECK (refund_amount BETWEEN 0 AND amount_paid)"
+        DATETIME     active_slot    UK  "GENERATED STORED = IF(status='BOOKED', appt_datetime, NULL) | UNIQUE (doctor_id, active_slot): a doctor cannot have two booked appointments at the same date/time"
+    }
