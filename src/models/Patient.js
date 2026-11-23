@@ -10,8 +10,9 @@ async function findAll() {
   return rows;
 }
 
-async function findById(id) {
-  const [rows] = await pool.execute(`SELECT ${COLUMNS} FROM patients WHERE patient_id = ?`, [id]);
+// `db` is optional: pass a transaction connection to read inside a transaction.
+async function findById(id, db = pool) {
+  const [rows] = await db.execute(`SELECT ${COLUMNS} FROM patients WHERE patient_id = ?`, [id]);
   return rows[0] || null;
 }
 

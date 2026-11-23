@@ -213,6 +213,19 @@ Patients with appointments cannot be deleted (`ON DELETE RESTRICT`) so refund hi
 
 `consultation_fee` must be a JSON number ≥ 0 with at most 2 decimal places (fits `DECIMAL(10,2)`).
 
+### Appointments
+
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| `POST` | `/api/appointments` | Book (`patient_id`, `doctor_id`, `appt_datetime` e.g. `"2026-12-01 09:30"`) | `201` + `Location` | `400` malformed, `404` patient/doctor, `409` slot taken / day full, `422` past / outside hours / not on a 30-min boundary |
+| `GET` | `/api/appointments/:id` | Get one appointment (incl. cancelled) | `200` | `400`, `404` |
+| `DELETE` | `/api/appointments/:id` | Cancel; response includes the refund | `200` | `400`, `404`, `409` already cancelled / already taken place |
+
+`amount_paid` is set by the server from the doctor's `consultation_fee` — clients can't choose what they pay.
+`DELETE` cancels rather than erases: the row is kept with `status = CANCELLED` for refund history, so it returns
+`200` with the refund (not `204`). The `409` booking responses include `details.reason` (`SLOT_TAKEN` / `DAY_FULL`)
+and `waitlist_available: true` (see Part E).
+
 ### Error handling
 
 A central middleware (`src/middleware/errorHandler.js`) converts errors into responses:
@@ -223,7 +236,39 @@ A central middleware (`src/middleware/errorHandler.js`) converts errors into res
 
 ### Part C — Booking & cancellation
 
-_TODO: how concurrent double-booking is prevented, how the 12/day cap is enforced, refund boundary policy, transaction for cancellation + refund._
+Pure rules live in `src/utils/booking-rules.js` (`validateSlot`, `calculateRefund`). They take `now` as an
+argument, so they have no DB or clock dependency and are unit-tested directly.
+
+**Future / working hours / 30-minute slots.** `validateSlot()` rejects malformed dates (`400`) and past,
+out-of-hours or misaligned times (`422`) before any DB work. Working hours are 09:00–17:00, so the last slot
+*starts* at 16:30; 17:00 is rejected. `chk_appt_slot` in the schema repeats the hours/boundary rule as a safety net.
+
+**Max 12 per doctor per day.** A `CHECK` can't count rows, so this is enforced in a transaction
+(`src/config/transaction.js`): the doctor's row is locked with `SELECT … FOR UPDATE`, then the day's `BOOKED`
+appointments are counted, then the new one is inserted, then commit. Concurrent bookings for the *same* doctor
+queue on that lock, so two requests can't both read "11" and both insert. Bookings for other doctors aren't blocked.
+*Tested:* with 11 booked, 4 simultaneous requests for different slots → exactly one `201`, three `409 DAY_FULL`.
+
+**Two patients can never hold the same slot.** `UNIQUE (doctor_id, active_slot)` in the database is the
+guarantee — it holds even if application code is bypassed. The losing `INSERT` fails with `ER_DUP_ENTRY`,
+returned as `409 SLOT_TAKEN`. *Tested:* 6 simultaneous requests for one slot → exactly one `201`.
+
+**Refund policy** (computed by the server from the notice given):
+
+| Notice before appointment | Refund |
+|---|---|
+| more than 48 h | 100% |
+| 24 h to 48 h (**both boundaries inclusive**: exactly 48 h → 50%, exactly 24 h → 50%) | 50% |
+| less than 24 h | 0% |
+
+Amounts are calculated in cents to avoid floating-point errors. Appointments that have already started can't be cancelled (`409`).
+
+**Cancellation and refund succeed or fail together.** Both are written by one `UPDATE` (status, `cancelled_at`,
+`refund_amount`) inside a transaction that first locks the row (`FOR UPDATE`), so two concurrent cancellations
+can't both refund it. `chk_appt_cancellation` also rejects a cancelled row without a refund.
+
+**Cancelled slots become bookable again.** `active_slot` is a generated column, NULL when cancelled. `UNIQUE`
+ignores NULLs, so the slot frees up while the cancelled row is kept for refund history.
 
 ### Part D — Audit logging
 
