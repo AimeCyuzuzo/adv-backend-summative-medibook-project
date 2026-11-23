@@ -56,6 +56,19 @@ Defined in `.env` (not committed). See [`.env.example`](.env.example).
 | `DB_PASSWORD` | — | MySQL password (also used by Docker to initialise the container) |
 | `DB_NAME` | `medibook` | Database name |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection URL |
+| `CLINIC_TZ` | `Africa/Kigali` | Clinic timezone (IANA name) used for all business rules |
+
+### Timezone
+
+`appt_datetime` is stored as **clinic local time** (a `DATETIME` has no timezone), because the business rules
+are defined in local time: working hours 09:00–17:00, the 12-per-**day** cap, and per-day reports.
+Converting only at display time would be too late — the rules would already have run on the wrong clock.
+
+- **Node owns "now"** (`src/utils/clock.js`): the current clinic time is computed with `Intl.DateTimeFormat`
+  in `CLINIC_TZ` and passed into SQL as a `?` parameter. This also keeps the slot and refund functions pure
+  and unit-testable (tests pass a fixed `now`).
+- The MySQL container also runs in `CLINIC_TZ` (`TZ` in `docker-compose.yml`), so `CURRENT_TIMESTAMP` defaults
+  like `created_at` match the app's clock.
 
 ## Services (Docker)
 
