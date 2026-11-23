@@ -63,7 +63,7 @@ async function remove(id) {
  *  - upcoming_appointments: BOOKED appointments after `now`
  *  - next_7_days_*: BOOKED appointments from `today` for 7 days, and utilization vs 7 × daily cap
  * LEFT JOIN so a doctor with no appointments still returns a row (with zeros).
- * @returns {object|null} null if the doctor doesn't exist
+ * @returns {Promise<object|null>} null if the doctor doesn't exist
  */
 async function getStatsSummary(id, { now, today, dailyCap, days }) {
   const [rows] = await pool.execute(

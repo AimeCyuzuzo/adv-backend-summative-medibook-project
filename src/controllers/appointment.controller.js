@@ -5,6 +5,7 @@ const Patient = require('../models/Patient');
 const AppError = require('../utils/AppError');
 const { withTransaction } = require('../config/transaction');
 const { clinicNow } = require('../utils/clock');
+const { audit } = require('../utils/auditLogger');
 const { parseId } = require('../validators/common');
 const { validateBooking } = require('../validators/appointment.validator');
 const { validateSlot, calculateRefund, MAX_APPOINTMENTS_PER_DAY } = require('../utils/booking-rules');
@@ -76,7 +77,17 @@ async function bookAppointment(req, res) {
     });
 
     const appointment = await Appointment.findById(appointmentId);
-    // TODO Part D: append BOOKED event to logs/audit.log
+
+    // Fire-and-forget (no await): the response doesn't wait for the disk write,
+    // and audit() never rejects, so a logging failure can't fail this request.
+    audit('APPOINTMENT_BOOKED', {
+      appointment_id: appointment.appointment_id,
+      appt_ref: appointment.appt_ref,
+      patient_id: appointment.patient_id,
+      doctor_id: appointment.doctor_id,
+      appt_datetime: appointment.appt_datetime,
+      amount_paid: appointment.amount_paid,
+    });
     // TODO Part E: enqueue confirmation notification job
     res.status(201).location(`/api/appointments/${appointmentId}`).json({ data: appointment });
   } catch (err) {
@@ -112,7 +123,19 @@ async function cancelAppointment(req, res) {
   });
 
   const appointment = await Appointment.findById(id);
-  // TODO Part D: append CANCELLED event to logs/audit.log
+
+  // Fire-and-forget, as for bookings — see audit() in src/utils/auditLogger.js.
+  audit('APPOINTMENT_CANCELLED', {
+    appointment_id: appointment.appointment_id,
+    appt_ref: appointment.appt_ref,
+    patient_id: appointment.patient_id,
+    doctor_id: appointment.doctor_id,
+    appt_datetime: appointment.appt_datetime,
+    cancelled_at: appointment.cancelled_at,
+    hours_notice: refund.hoursNotice,
+    refund_percent: refund.percent,
+    refund_amount: refund.amount,
+  });
   // TODO Part E: notify the waitlist that this slot is free
   res.json({
     data: {

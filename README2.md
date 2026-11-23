@@ -298,7 +298,26 @@ ignores NULLs, so the slot frees up while the cancelled row is kept for refund h
 
 ### Part D — Audit logging
 
-_TODO_
+Every successful booking and cancellation is appended to `logs/audit.log` as one JSON object per line
+(JSON Lines) by `audit()` in `src/utils/auditLogger.js`. Example:
+
+```json
+{"timestamp":"2026-11-23T20:59:39.116Z","event":"APPOINTMENT_CANCELLED","appointment_id":18,"appt_ref":"AP-A1FC8A9F","patient_id":1,"doctor_id":3,"appt_datetime":"2026-11-29 10:00:00","cancelled_at":"2026-11-23 22:59:39","hours_notice":131.01,"refund_percent":100,"refund_amount":80}
+```
+
+- **Async, non-blocking.** Uses `fs/promises` (`mkdir`, `appendFile`). There are no `*Sync` calls anywhere in
+  `src/`, so the event loop keeps serving other requests during the write.
+- **Creates `logs/` on first run.** `mkdir(..., { recursive: true })` runs before each append. It's a no-op when
+  the folder exists, and it also recovers if the folder is deleted while the server is running.
+- **A logging failure never fails the request.** `audit()` catches its own errors, reports them to stderr and resolves
+  `false`; it never rejects. Controllers call it *without* `await` (fire-and-forget), *after* the transaction
+  has committed, so the response doesn't wait on the disk.
+  *Tested:* with the log path pointed at an unwritable location, bookings still returned `201` and the failure was printed to stderr.
+- **Only successful operations are logged.** The call comes after the commit, so rejected or rolled-back requests
+  (`409`, `422`, …) never appear in the log.
+- **Timestamps are ISO-8601 UTC** (unambiguous for logs); appointment times are clinic local, as stored.
+- Appending one short line per call keeps entries intact when requests run at the same time. `logs/` is git-ignored.
+  `AUDIT_LOG_PATH` can override the location (used for testing).
 
 ### Part E — Waitlist & notifications
 

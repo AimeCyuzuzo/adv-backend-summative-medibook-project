@@ -55,7 +55,7 @@ async function countBookedForDoctorOnDay(db, doctorId, day) {
 /**
  * Inserts a booking. Throws ER_DUP_ENTRY on uq_doctor_slot if the slot is taken
  * (including when two requests race for the same slot at the same instant).
- * @returns {number} new appointment_id
+ * @returns {Promise<number>} new appointment_id
  */
 async function create(db, { appt_ref, patient_id, doctor_id, appt_datetime, amount_paid, booked_on }) {
   const [result] = await db.execute(
@@ -70,7 +70,7 @@ async function create(db, { appt_ref, patient_id, doctor_id, appt_datetime, amou
  * Cancels a booking AND records its refund in one statement.
  * `status = 'BOOKED'` in the WHERE makes it a no-op if already cancelled.
  * Setting status = 'CANCELLED' makes the generated active_slot NULL, which frees the slot.
- * @returns {boolean} true if the row was cancelled
+ * @returns {Promise<boolean>} true if the row was cancelled
  */
 async function cancel(db, id, { cancelled_at, refund_amount }) {
   const [result] = await db.execute(
