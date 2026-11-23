@@ -35,6 +35,9 @@ npm start
 
 On its **first** start, the MySQL container automatically runs `database/schema.sql` and then `database/seed.sql`.
 
+Upcoming seed appointments are dated **relative to today** (`CURDATE() + INTERVAL n DAY`), so the stats and
+busy-days report always have data to show. Run `npm run db:reset` before a demo to refresh them.
+
 After that, manage the database **inside the running container** with the `db:*` scripts (no need to take Docker down):
 
 ```bash
@@ -212,6 +215,29 @@ Patients with appointments cannot be deleted (`ON DELETE RESTRICT`) so refund hi
 | `DELETE` | `/api/doctors/:id` | Delete a doctor | `204` | `404`, `409` has appointments |
 
 `consultation_fee` must be a JSON number ≥ 0 with at most 2 decimal places (fits `DECIMAL(10,2)`).
+
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| `GET` | `/api/doctors/:id/stats` | Revenue collected, upcoming count, appointments per day for the next 7 days, utilization % vs the 12-slot cap | `200` | `400`, `404` |
+
+### Reports
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/reports/doctors` | Every doctor's total / booked / cancelled appointments, amount paid, refunded and revenue — **including doctors with zero appointments** |
+| `GET` | `/api/reports/busy-days` | Every (doctor, date) with **more than 80%** of the 12-slot cap booked (i.e. ≥ 10 appointments) |
+
+**Definitions** (all computed in SQL in `src/models/Doctor.js` and `src/models/Report.js`):
+
+- **Revenue collected** = `SUM(amount_paid − refund_amount)`. Patients pay at booking, so upcoming bookings count; refunds are subtracted.
+- **Upcoming** = `BOOKED` appointments after the current clinic time.
+- **Next 7 days** = today plus the following 6 days. A recursive CTE generates the 7 dates and appointments are
+  `LEFT JOIN`ed onto them, so days with no appointments still appear with `0`.
+- **Utilization %** = booked ÷ 12 × 100 per day, and booked ÷ (7 × 12) × 100 for the whole week.
+- **Doctors report** uses `LEFT JOIN doctors → appointments`, so doctors with no appointments appear with zeros
+  (`COUNT(a.appointment_id)` ignores the NULL row; `COALESCE` turns NULL sums into `0`).
+- **Busy days** filters rows with `WHERE status = 'BOOKED'` *before* grouping, then filters groups with
+  `HAVING COUNT(*) > 12 × 80 / 100` *after* grouping. Cancelled appointments don't count.
 
 ### Appointments
 

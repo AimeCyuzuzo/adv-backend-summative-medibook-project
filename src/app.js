@@ -2,6 +2,7 @@ const express = require('express');
 const patientRoutes = require('./routes/patient.routes');
 const doctorRoutes = require('./routes/doctor.routes');
 const appointmentRoutes = require('./routes/appointment.routes');
+const reportRoutes = require('./routes/report.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Builds the Express app without starting it (server.js calls listen).
@@ -9,12 +10,13 @@ const app = express();
 
 app.use(express.json());
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/patients', patientRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
-// TODO: doctor stats, reports, /feedback
+app.use('/api/reports', reportRoutes);
+// TODO: /feedback
 
 app.use(notFound);
 app.use(errorHandler);
