@@ -7,12 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "worker": "node worker.js",
+    "worker:dev": "nodemon worker.js",
     "test": "jest",
     "db:schema": "sh scripts/db.sh schema",
     "db:seed": "sh scripts/db.sh seed",
     "db:reset": "sh scripts/db.sh reset",
     "db:drop": "sh scripts/db.sh drop",
-    "db:shell": "sh scripts/db.sh shell"
+    "db:shell": "sh scripts/db.sh shell",
+    "queue:reset": "docker compose exec -T redis redis-cli FLUSHDB"
   },
   "dependencies": {
     "dotenv": "^18.0.10",

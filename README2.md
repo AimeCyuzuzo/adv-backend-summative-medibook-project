@@ -31,6 +31,9 @@ docker compose ps          # wait until mysql shows "healthy"
 # 4. Install dependencies and start the API
 npm install
 npm start
+
+# 5. In a SECOND terminal, start the background worker (waitlist + notifications)
+npm run worker
 ```
 
 On its **first** start, the MySQL container automatically runs `database/schema.sql` and then `database/seed.sql`.
@@ -100,11 +103,15 @@ docker compose down -v                        # stop AND delete all data (full w
 │   ├── models/        all SQL lives here (parameterized queries only)
 │   ├── controllers/   business logic; calls models, never the DB directly
 │   ├── routes/        maps URLs + HTTP methods to controllers
+│   ├── services/      booking/cancellation logic shared by controllers AND the worker
+│   ├── queues/        Redis job queue + waitlists
+│   ├── worker/        job handlers run by worker.js
 │   ├── validators/    pure validation functions (unit-tested)
 │   ├── middleware/    404 + central error handler
-│   └── utils/         AppError
+│   └── utils/         AppError, clinic clock, booking rules, audit logger
 ├── scripts/db.sh      database management (used by the db:* npm scripts)
-├── server.js          entry point: checks DB connection, then starts listening
+├── server.js          API entry point: checks MySQL + Redis, then starts listening
+├── worker.js          background worker process (npm run worker)
 ├── docker-compose.yml MySQL + Redis for local development
 └── .env.example       template for environment variables
 ```
@@ -115,6 +122,9 @@ docker compose down -v                        # stop AND delete all data (full w
 |---|---|
 | `npm start` | Start the API |
 | `npm run dev` | Start the API with auto-reload (nodemon) |
+| `npm run worker` | Start the background worker (separate process) |
+| `npm run worker:dev` | Start the worker with auto-reload |
+| `npm run queue:reset` | Empty Redis (all waitlists and queued jobs) |
 | `npm test` | Run Jest unit tests |
 | `npm run db:schema` | Run `database/schema.sql` |
 | `npm run db:seed` | Run `database/seed.sql` |
@@ -250,7 +260,14 @@ Patients with appointments cannot be deleted (`ON DELETE RESTRICT`) so refund hi
 `amount_paid` is set by the server from the doctor's `consultation_fee` — clients can't choose what they pay.
 `DELETE` cancels rather than erases: the row is kept with `status = CANCELLED` for refund history, so it returns
 `200` with the refund (not `204`). The `409` booking responses include `details.reason` (`SLOT_TAKEN` / `DAY_FULL`)
-and `waitlist_available: true` (see Part E).
+and `details.waitlist`, describing how to join the waitlist (see Part E).
+
+### Waitlist
+
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| `POST` | `/api/waitlist` | Join a doctor's waitlist for a day (`patient_id`, `doctor_id`, `date`) | `201` + position | `400`, `404` patient/doctor, `409` already on it |
+| `GET` | `/api/waitlist?doctor_id=1&date=2026-12-01` | View a waitlist in order | `200` | `400` |
 
 ### Error handling
 
@@ -321,7 +338,63 @@ Every successful booking and cancellation is appended to `logs/audit.log` as one
 
 ### Part E — Waitlist & notifications
 
-_TODO: queue design, worker process, what happens if a promoted booking fails._
+**Processes.** The API (`npm start`) only *produces* jobs. A separate worker process (`npm run worker`,
+`worker.js`) consumes them, so slow background work never delays HTTP responses.
+
+**Redis structures** (`src/queues/keys.js`):
+
+| Key | Type | Purpose |
+|---|---|---|
+| `queue:jobs` | list | Pending jobs. The API `LPUSH`es; the worker takes from the right (FIFO) |
+| `queue:jobs:processing` | list | Jobs the worker is handling right now |
+| `queue:jobs:failed` | list | Jobs that failed 3 times, kept for inspection |
+| `waitlist:<doctor>:<date>` | list | Patients waiting for that doctor/day, first in line at the head |
+| `waitlist:<doctor>:<date>:members` | set | Patient ids on that list, so a patient can't join twice |
+| `waitlist:processing` | list | Entries being promoted right now |
+| `waitlist:failed` | list | Entries that can never be booked (e.g. patient deleted), with the reason |
+
+**Waitlist flow.**
+1. A booking that fails with `409` (`SLOT_TAKEN` or `DAY_FULL`) includes a `details.waitlist` offer.
+   The patient joins with `POST /api/waitlist`. The waitlist is per doctor **per day**: the patient gets the first slot freed that day.
+2. A cancellation commits, then pushes a `SLOT_FREED { doctor_id, appt_datetime }` job.
+3. The worker atomically moves the first entry from `waitlist:<doctor>:<date>` to `waitlist:processing`
+   (`LMOVE`), then books it through **the same `bookAppointment()` service the API uses**, so every rule
+   (future, hours, 12/day cap, row lock, unique slot) applies to promotions too.
+
+**What if the promoted booking fails?** The patient is never removed until their appointment has committed.
+At every moment the entry is in exactly one place: the waitlist, `waitlist:processing`, the appointments table, or `waitlist:failed`.
+
+| Outcome | Action |
+|---|---|
+| Booked | Entry removed (`confirm`); `WAITLIST_PROMOTED` audited; confirmation job queued |
+| Slot taken by someone else first, day full again, slot now in the past | Entry **put back at the front** (`putBack`). The patient keeps their place for the next cancellation |
+| Patient or doctor deleted (`404`) | Moved to `waitlist:failed` with the reason (recorded, not lost); the slot is offered to the next patient |
+| Unexpected error (MySQL/Redis down) | Put back at the front, and the job is retried (up to 3 attempts, then `queue:jobs:failed`) |
+| Worker crashes mid-promotion | On the next start, `recoverProcessing()` moves anything left in `waitlist:processing` back to the front of its list |
+
+Each step also writes a `WAITLIST_PROMOTED` / `WAITLIST_PROMOTION_FAILED` line to the audit log.
+
+**Reliable job processing.** The worker uses `BLMOVE queue:jobs → queue:jobs:processing` (atomic), and only removes
+a job after it succeeds. Failures are requeued with an `attempts` counter. Leftovers in `processing` are requeued on
+start-up. Recovery assumes a **single worker process**; several workers would need per-worker processing lists.
+
+**Notification jobs.** Every confirmed booking (from the API *or* a waitlist promotion) queues
+`SEND_CONFIRMATION { appointment_id }`. The worker "sends" it by writing a `NOTIFICATION_SENT` line with the
+message text to the audit log. It's skipped if the appointment was cancelled in the meantime, and retried if the log
+write fails.
+
+**Resilience.**
+- Jobs are queued *after* the DB commit with `enqueueSafely()`, which never throws, so a Redis outage can't fail a
+  booking. The client uses `disableOfflineQueue`, so commands fail fast instead of hanging.
+  *Tested:* with Redis stopped, a booking returned `201` in ~60 ms.
+  *Trade-off:* that booking's confirmation job is lost (logged to stderr). A transactional outbox table would fix this,
+  but the 3-table limit rules it out.
+- The worker survives Redis restarts: it logs, waits 2 s and retries (the client reconnects automatically).
+- Redis runs with `appendonly yes` on a Docker volume, so waitlists and pending jobs survive a Redis restart.
+
+**Tested end-to-end:** promotion on cancellation; a failed promotion (slot grabbed directly while the worker was
+stopped) leaves the patient first in line; a deleted patient is dead-lettered and the next patient is promoted;
+an entry stuck in `waitlist:processing` is restored on worker start; the worker keeps working after Redis restarts.
 
 ## Testing (Part F)
 
