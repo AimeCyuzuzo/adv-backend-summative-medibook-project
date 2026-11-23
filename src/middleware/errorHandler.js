@@ -10,13 +10,13 @@ const MYSQL_ERRORS = {
 };
 
 // 404 for any route that didn't match.
-function notFound(req, res, next) {
+function notFound(req, _res, next) {
   next(new AppError(404, `Route ${req.method} ${req.originalUrl} not found`));
 }
 
-// Central error-handling middleware (must have 4 arguments).
-// eslint-disable-next-line no-unused-vars
-function errorHandler(err, req, res, next) {
+// Central error-handling middleware. Express recognises it by its 4 arguments,
+// so `_next` must stay even though it is unused.
+function errorHandler(err, _req, res, _next) {
   // Malformed JSON body sent by the client
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: { message: 'Request body is not valid JSON' } });

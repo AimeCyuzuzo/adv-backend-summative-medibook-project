@@ -22,4 +22,16 @@ function isPhone(value) {
   return typeof value === 'string' && PHONE_RE.test(value.trim());
 }
 
-module.exports = { parseId, isNonEmptyString, isEmail, isPhone };
+// A JSON number >= 0 with at most 2 decimal places that fits DECIMAL(10,2).
+// Strings like "150" are rejected on purpose: money must be sent as a number.
+function isMoney(value) {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 99999999.99 &&
+    /^\d+(\.\d{1,2})?$/.test(String(value)) // e.g. 150, 99.5, 120.25 — not 10.999
+  );
+}
+
+module.exports = { parseId, isNonEmptyString, isEmail, isPhone, isMoney };

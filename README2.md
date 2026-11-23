@@ -190,7 +190,15 @@ Patients with appointments cannot be deleted (`ON DELETE RESTRICT`) so refund hi
 
 ### Doctors
 
-_TODO_
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| `GET` | `/api/doctors` | List all doctors | `200` | — |
+| `GET` | `/api/doctors/:id` | Get one doctor | `200` | `400` bad id, `404` |
+| `POST` | `/api/doctors` | Create a doctor (`full_name`, `specialty`, `consultation_fee`, `room`) | `201` + `Location` | `400` validation |
+| `PATCH` | `/api/doctors/:id` | Update any subset of fields | `200` | `400`, `404` |
+| `DELETE` | `/api/doctors/:id` | Delete a doctor | `204` | `404`, `409` has appointments |
+
+`consultation_fee` must be a JSON number ≥ 0 with at most 2 decimal places (fits `DECIMAL(10,2)`).
 
 ### Error handling
 
