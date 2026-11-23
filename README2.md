@@ -79,11 +79,16 @@ docker compose down -v                        # stop AND delete all data (full w
 ```
 ├── database/          schema.sql and seed.sql
 ├── src/
+│   ├── app.js         Express app (middleware, routes, error handler)
+│   ├── config/db.js   mysql2 connection pool
 │   ├── models/        all SQL lives here (parameterized queries only)
 │   ├── controllers/   business logic; calls models, never the DB directly
-│   └── routes/        maps URLs + HTTP methods to controllers
+│   ├── routes/        maps URLs + HTTP methods to controllers
+│   ├── validators/    pure validation functions (unit-tested)
+│   ├── middleware/    404 + central error handler
+│   └── utils/         AppError
 ├── scripts/db.sh      database management (used by the db:* npm scripts)
-├── server.js          Express app entry point
+├── server.js          entry point: checks DB connection, then starts listening
 ├── docker-compose.yml MySQL + Redis for local development
 └── .env.example       template for environment variables
 ```
@@ -92,8 +97,9 @@ docker compose down -v                        # stop AND delete all data (full w
 
 | Command | Description |
 |---|---|
-| `npm start` | Start the API _(TODO)_ |
-| `npm test` | Run Jest unit tests _(TODO)_ |
+| `npm start` | Start the API |
+| `npm run dev` | Start the API with auto-reload (nodemon) |
+| `npm test` | Run Jest unit tests |
 | `npm run db:schema` | Run `database/schema.sql` |
 | `npm run db:seed` | Run `database/seed.sql` |
 | `npm run db:reset` | Drop and recreate the database, then run schema + seed |
@@ -167,7 +173,30 @@ Note why `amount_paid` stays on `appointments` (AP-002 paid 120 vs a 150 fee)._
 
 ## API endpoints (Part C)
 
+All responses are JSON. Success: `{ "data": ... }`. Errors: `{ "error": { "message": "...", "details": [...] } }`.
+
+### Patients
+
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| `GET` | `/api/patients` | List all patients | `200` | — |
+| `GET` | `/api/patients/:id` | Get one patient | `200` | `400` bad id, `404` |
+| `POST` | `/api/patients` | Create a patient (`full_name`, `email`, `phone`) | `201` + `Location` | `400` validation, `409` email taken |
+| `PATCH` | `/api/patients/:id` | Update any subset of fields | `200` | `400`, `404`, `409` email taken |
+| `DELETE` | `/api/patients/:id` | Delete a patient | `204` | `404`, `409` has appointments |
+
+`PATCH` (not `PUT`) is used because clients may send only the fields they want to change.
+Patients with appointments cannot be deleted (`ON DELETE RESTRICT`) so refund history is never lost.
+
+### Doctors
+
 _TODO_
+
+### Error handling
+
+A central middleware (`src/middleware/errorHandler.js`) converts errors into responses:
+`AppError` → its status code; malformed JSON → `400`; MySQL `ER_DUP_ENTRY` → `409`,
+`ER_CHECK_CONSTRAINT_VIOLATED` → `422`, `ER_ROW_IS_REFERENCED_2` → `409`; anything else → `500` without leaking internals.
 
 ## Design justifications
 
