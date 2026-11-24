@@ -398,7 +398,22 @@ an entry stuck in `waitlist:processing` is restored on worker start; the worker 
 
 ## Testing (Part F)
 
-_TODO_
+```bash
+npm test
+```
+
+56 Jest unit tests in `tests/`. They **don't need MySQL or Redis** (verified by running them with both containers
+stopped), because the rules are pure functions in `src/utils/` and `src/validators/` that take `now` as an argument
+instead of reading the clock or the database.
+
+| File | What it covers |
+|---|---|
+| `tests/refund.test.js` | Refund calculator: all three tiers, **exactly 48 h → 50%**, **exactly 24 h → 50%**, one minute either side of each boundary, cent rounding, month boundary |
+| `tests/slot-validation.test.js` | Slot check: 09:00 and 16:30 accepted; **17:00 exactly**, 08:30 rejected (422); **09:15**, 10:45, non-zero seconds rejected (422); past and "exactly now" rejected (422); **malformed** input (Feb 30, 24:00, date only, free text, `null`, number) rejected (400); leap years |
+| `tests/validators.test.js` | Id parsing (incl. `1 OR 1=1`), money format, patient/doctor/waitlist validation, UTC → Africa/Kigali conversion |
+
+The tests were also checked against a deliberately broken rule: changing the 24-hour boundary from `>=` to `>`
+makes the "exactly 24 hours" test fail.
 
 ## Feedback page (Part G)
 
