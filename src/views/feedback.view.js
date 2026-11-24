@@ -48,7 +48,7 @@ function renderFeedbackPage({ lang, messages, today, otherLang }) {
       const id = `q${i + 1}`;
       return `      <li>
         <label for="${id}">${escapeHtml(question)}</label>
-        <textarea id="${id}" name="${id}" required></textarea>
+        <textarea id="${id}" name="${id}" required>${escapeHtml(messages.answers?.[i] ?? '')}</textarea>
       </li>`;
     })
     .join('\n');

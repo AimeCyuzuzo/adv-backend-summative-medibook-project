@@ -10,6 +10,13 @@
     "What would you improve about how this course was taught or assessed?",
     "How do you plan to apply what you learned in this course going forward?"
   ],
+  "answers": [
+    "Concurrency. Two simultaneous requests can both pass a check and break a rule, so I learned the guarantee has to come from the database: unique keys, transactions and row locks.",
+    "Internationalisation. Building the feedback page showed me how to keep all text in locale files, pick the language from ?lang with a safe fallback to English, and format dates for each locale with Intl.DateTimeFormat.",
+    "I now let the database enforce rules with constraints, and design APIs with clear REST routes, correct status codes and separate layers with parameterized SQL.",
+    "N/A",
+    "I will protect data with constraints and transactions, move slow work to background workers, and keep business rules in small, testable functions."
+  ],
   "submit": "Submit feedback",
   "thank_you": "Thank you! Your feedback has been received.",
   "back": "Back to the form",

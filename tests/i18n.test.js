@@ -26,6 +26,7 @@ describe('locale files', () => {
     for (const [lang, messages] of Object.entries(LOCALES)) {
       expect({ lang, keys: Object.keys(messages).sort() }).toEqual({ lang, keys: englishKeys });
       expect(messages.questions).toHaveLength(5);
+      expect(messages.answers).toHaveLength(5);
     }
   });
 });
@@ -55,6 +56,7 @@ describe('renderFeedbackPage', () => {
     expect(html).toContain('<title>Évaluation du cours</title>');
     expect(html.match(/<textarea/g)).toHaveLength(5);
     expect(html).toContain(escapeHtml(LOCALES.fr.questions[0]));
+    expect(html).toContain(`required>${escapeHtml(LOCALES.fr.answers[0])}</textarea>`);
   });
 
   test('escapes HTML special characters', () => {

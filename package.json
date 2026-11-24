@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "worker": "node worker.js",
     "worker:dev": "nodemon worker.js",
+    "logs": "sh scripts/watch-audit.sh",
     "test": "jest",
     "db:schema": "sh scripts/db.sh schema",
     "db:seed": "sh scripts/db.sh seed",

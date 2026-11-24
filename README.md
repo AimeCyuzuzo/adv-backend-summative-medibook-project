@@ -1,5 +1,7 @@
 # MediBook — Clinic Appointment API
 
+## [Watch Video Walkthrough](https://youtu.be/I7LDJXNKjF8)
+
 Backend service for booking doctor appointments at a community clinic.
 Doctors see patients in 30-minute slots between 09:00 and 17:00, with a maximum of 12 appointments per doctor per day.
 
@@ -399,6 +401,19 @@ write fails.
 stopped) leaves the patient first in line; a deleted patient is dead-lettered and the next patient is promoted;
 an entry stuck in `waitlist:processing` is restored on worker start; the worker keeps working after Redis restarts.
 
+## Manual API testing (Postman)
+
+`postman/MediBook.postman_collection.json` has 47 requests covering every endpoint, each with a status-code test.
+
+1. Reset the data so the requests start from a known state: `npm run db:reset && npm run queue:reset`
+2. Start the API (`npm start`) and the worker (`npm run worker`) in two terminals.
+3. In Postman, go to **Import** and choose the file. Then either run the whole collection with **Run collection**
+   or click through the requests from top to bottom.
+
+The requests are in demo order: later ones use ids saved by earlier ones, and the Appointments and Waitlist
+folders change data. Reset again before running the collection a second time. Dates such as `{{busyDay}}` and
+`{{freeDay}}` are calculated in Kigali time before each request, so they always line up with the seed data.
+
 ## Testing (Part F)
 
 ```bash
@@ -424,8 +439,8 @@ makes the "exactly 24 hours" test fail.
 Open <http://localhost:3000/feedback> (English) or <http://localhost:3000/feedback?lang=fr> (French).
 A link at the top switches between the two.
 
-- **Locale files:** `locales/en.json` and `locales/fr.json` hold the page title, instructions, all 5 questions
-  and the button labels. The HTML in `src/views/feedback.view.js` contains no hard-coded text, so adding a language
+- **Locale files:** `locales/en.json` and `locales/fr.json` hold the page title, instructions, all 5 questions,
+  my answers to them (shown pre-filled in each textarea) and the button labels. The HTML in `src/views/feedback.view.js` contains no hard-coded text, so adding a language
   means adding one JSON file and one line in `src/utils/i18n.js`.
 - **Fallback:** `resolveLang` accepts only a string that is a key of the loaded locales. Anything else gives
   English, including a missing value, `?lang=de`, a repeated `?lang=fr&lang=en` (Express makes that an array) and

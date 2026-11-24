@@ -10,6 +10,13 @@
     "Que changeriez-vous dans la manière dont ce cours a été enseigné ou évalué ?",
     "Comment comptez-vous appliquer ce que vous avez appris dans ce cours à l'avenir ?"
   ],
+  "answers": [
+    "La concurrence. Deux requêtes simultanées peuvent passer une vérification et enfreindre une règle ; j'ai appris que la garantie doit venir de la base de données : clés uniques, transactions et verrous de ligne.",
+    "L'internationalisation. La page d'évaluation m'a montré comment garder tous les textes dans des fichiers de langue, choisir la langue avec ?lang en revenant à l'anglais par défaut, et formater les dates selon la langue avec Intl.DateTimeFormat.",
+    "Je laisse maintenant la base de données appliquer les règles avec des contraintes, et je conçois des API avec des routes REST claires, les bons codes de statut et des couches séparées avec du SQL paramétré.",
+    "N/A",
+    "Je protégerai les données avec des contraintes et des transactions, je déplacerai les tâches lentes vers des workers, et je garderai les règles métier dans de petites fonctions testables."
+  ],
   "submit": "Envoyer mon avis",
   "thank_you": "Merci ! Votre avis a bien été reçu.",
   "back": "Retour au formulaire",
