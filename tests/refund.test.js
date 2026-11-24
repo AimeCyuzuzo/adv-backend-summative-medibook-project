@@ -1,6 +1,6 @@
 const { calculateRefund } = require('../src/utils/booking-rules');
 
-// Policy (documented in README2.md):
+// Policy (documented in README.md):
 //   more than 48h notice              → 100%
 //   24h to 48h notice, both inclusive → 50%
 //   less than 24h notice              → 0%
