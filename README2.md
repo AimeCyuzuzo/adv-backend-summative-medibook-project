@@ -108,7 +108,10 @@ docker compose down -v                        # stop AND delete all data (full w
 │   ├── worker/        job handlers run by worker.js
 │   ├── validators/    pure validation functions (unit-tested)
 │   ├── middleware/    404 + central error handler
-│   └── utils/         AppError, clinic clock, booking rules, audit logger
+│   ├── views/         HTML for the feedback page (escaped template strings)
+│   └── utils/         AppError, clinic clock, booking rules, audit logger, i18n
+├── locales/           en.json and fr.json for the feedback page
+├── tests/             Jest unit tests (npm test)
 ├── scripts/db.sh      database management (used by the db:* npm scripts)
 ├── server.js          API entry point: checks MySQL + Redis, then starts listening
 ├── worker.js          background worker process (npm run worker)
@@ -402,7 +405,7 @@ an entry stuck in `waitlist:processing` is restored on worker start; the worker 
 npm test
 ```
 
-56 Jest unit tests in `tests/`. They **don't need MySQL or Redis** (verified by running them with both containers
+68 Jest unit tests in `tests/`. They **don't need MySQL or Redis** (verified by running them with both containers
 stopped), because the rules are pure functions in `src/utils/` and `src/validators/` that take `now` as an argument
 instead of reading the clock or the database.
 
@@ -411,10 +414,26 @@ instead of reading the clock or the database.
 | `tests/refund.test.js` | Refund calculator: all three tiers, **exactly 48 h → 50%**, **exactly 24 h → 50%**, one minute either side of each boundary, cent rounding, month boundary |
 | `tests/slot-validation.test.js` | Slot check: 09:00 and 16:30 accepted; **17:00 exactly**, 08:30 rejected (422); **09:15**, 10:45, non-zero seconds rejected (422); past and "exactly now" rejected (422); **malformed** input (Feb 30, 24:00, date only, free text, `null`, number) rejected (400); leap years |
 | `tests/validators.test.js` | Id parsing (incl. `1 OR 1=1`), money format, patient/doctor/waitlist validation, UTC → Africa/Kigali conversion |
+| `tests/i18n.test.js` | Language fallback (missing, `de`, repeated `?lang`, `__proto__`), locale files share the same keys and have 5 questions, date formatted per locale and in clinic time, French page renders 5 textareas, HTML escaping |
 
 The tests were also checked against a deliberately broken rule: changing the 24-hour boundary from `>=` to `>`
 makes the "exactly 24 hours" test fail.
 
 ## Feedback page (Part G)
 
-_TODO_
+Open <http://localhost:3000/feedback> (English) or <http://localhost:3000/feedback?lang=fr> (French).
+A link at the top switches between the two.
+
+- **Locale files:** `locales/en.json` and `locales/fr.json` hold the page title, instructions, all 5 questions
+  and the button labels. The HTML in `src/views/feedback.view.js` contains no hard-coded text, so adding a language
+  means adding one JSON file and one line in `src/utils/i18n.js`.
+- **Fallback:** `resolveLang` accepts only a string that is a key of the loaded locales. Anything else gives
+  English, including a missing value, `?lang=de`, a repeated `?lang=fr&lang=en` (Express makes that an array) and
+  `?lang=__proto__`. `Object.hasOwn` is used so inherited object properties never count as a language.
+- **Date (l10n):** `Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: CLINIC_TZ })`, for example
+  "Tuesday, 24 November 2026" and "mardi 24 novembre 2026". The time zone is the clinic's, so the date shown is
+  the date in Kigali, not on the server.
+- **Safety:** every piece of text is HTML-escaped before it goes into the page, and `<html lang="…">` is set to
+  the active language.
+- **Submitting:** the form posts to `POST /feedback`, which shows a thank-you message in the same language.
+  The brief only asks for the page, so answers are **not stored**.
